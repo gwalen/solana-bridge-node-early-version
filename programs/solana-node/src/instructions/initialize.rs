@@ -5,7 +5,6 @@ use anchor_spl::token::{Token, TokenAccount, Mint};
 use crate::state::config::Config;
 
 #[derive(Accounts)]
-// pub struct Initialize {
 pub struct Initialize<'info> {
 
     #[account(mut)]
@@ -24,17 +23,6 @@ pub struct Initialize<'info> {
         bump
     )]
     pub config: Account<'info, Config>,
-
-    // #[account(
-    //     init,
-    //     payer = owner,
-    //     mint::decimals = 6,
-    //     mint::authority = owner, // or owner.key() // TODO: CHECK
-    //     mint::freeze_authority = owner
-    // )]
-    // pub token_mint: Account<'info, Mint>,
-
-    // pub token_program: Program<'info, Token>,
 
     pub system_program: Program<'info, System>
 

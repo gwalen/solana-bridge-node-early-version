@@ -112,6 +112,12 @@ describe("solana-node", () => {
     
     const aliceTokenAmountBefore = Number((await provider.connection.getTokenAccountBalance(aliceTokenAta)).value.amount);
     const mintSupplyBefore = (await getMint(provider.connection, mintAddress)).supply;
+    let burnEventAmount = new anchor.BN(0);
+
+    const listenerMyEvent = program.addEventListener('burnEvent', (event, slot) => {
+      // console.log(`slot ${slot} burn event amount ${event.amount}`);
+      burnEventAmount = event.amount;
+    });
 
     await program.methods
       .burnAndBridge(amountToBridge)
@@ -127,9 +133,8 @@ describe("solana-node", () => {
 
     assert.equal(aliceTokenAmountBefore - aliceTokenAmountAfter, amountToBridge.toNumber());
     assert.equal(mintSupplyBefore - mintSupplyAfter, BigInt(amountToBridge.toNumber()));
+    assert.equal(burnEventAmount.toNumber(), amountToBridge.toNumber());
   });
 
-  // TODO: add test listening for burn event
-  // add to burn event nonce -> add nonce account
 
 });

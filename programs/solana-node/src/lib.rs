@@ -7,13 +7,12 @@ pub mod utils;
 
 use instructions::initialize::*;
 use instructions::take_token_mint_authority::*;
+use instructions::burn_and_bridge::*;
 
 use handlers::*;
 
 declare_id!("BNnLzXd4awDnxnycVseH2aN2dHV5grBQc6ucJJabtiZt");
 
-// TODO: 1. Add register token instruction
-// TODO: 2. Add burn instruction with events
 // TODO: 3. Add mint instruction with events
 // TODO: 4. Rename project to solana-bridge
 
@@ -27,5 +26,9 @@ pub mod solana_node {
 
     pub fn take_token_mint_authority(ctx: Context<TakeTokenMintAuthority>) -> Result<()> {
         take_token_mint_authority::handle(ctx)
+    }
+
+    pub fn burn_and_bridge(ctx: Context<BurnAndBridge>, amount: u64) -> Result<()> {
+        burn_and_bridge::handle(ctx, amount)
     }
 }

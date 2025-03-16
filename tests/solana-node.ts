@@ -3,9 +3,9 @@ import { Program } from "@coral-xyz/anchor";
 import { SolanaNode } from "../target/types/solana_node";
 import { OWNER, RELAYER } from "./consts";
 import { Keypair, PublicKey } from "@solana/web3.js";
-import { airdrop, deriveConfigPda } from "./utils";
+import { airdrop, deriveConfigPda, sleep } from "./utils";
 import { assert } from "chai";
-import { createMint, getMint } from "@solana/spl-token";
+import { createMint, getMint, getOrCreateAssociatedTokenAccount, mintTo } from "@solana/spl-token";
 
 describe("solana-node", () => {
   // Configure the client to use the local cluster.
@@ -15,13 +15,20 @@ describe("solana-node", () => {
   const baseWallet = provider.wallet as anchor.Wallet;
 
   const program = anchor.workspace.SolanaNode as Program<SolanaNode>;
+  const firstMintOwner = Keypair.generate();
+  const alice = Keypair.generate();
+  const mintDecimals = 6;
 
   let configPda: PublicKey;
   let mintAddress: PublicKey;
+  let aliceTokenAta: PublicKey;
+
 
   it("Airdrop actors", async () => {
     await airdrop(provider.connection, OWNER.publicKey);
     await airdrop(provider.connection, RELAYER.publicKey);
+    await airdrop(provider.connection, firstMintOwner.publicKey);
+    await airdrop(provider.connection, alice.publicKey);
   });
 
   it("Initialize program", async () => {
@@ -42,29 +49,52 @@ describe("solana-node", () => {
     assert.deepEqual(RELAYER.publicKey, config.relayer);
   });
 
-  it("Take token authority", async () => {
-    const mintOwner = Keypair.generate();
+  it("Mint tokens to alice", async () => {
+    const mintAmountForAlice = 25 * 10 ** mintDecimals;
 
     // Create the mint
     mintAddress = await createMint(
       provider.connection,
       OWNER,
-      mintOwner.publicKey, // mint authority
-      mintOwner.publicKey, // Freeze authority
-      6
+      firstMintOwner.publicKey, // mint authority
+      firstMintOwner.publicKey, // Freeze authority
+      mintDecimals
     );
 
-    console.log(`Created new mint: ${mintAddress.toBase58()}`);
-    console.log(`Created mint owner: ${mintOwner.publicKey.toBase58()}`);
+    aliceTokenAta = (await getOrCreateAssociatedTokenAccount(
+      provider.connection,
+      firstMintOwner,  // payer
+      mintAddress,
+      alice.publicKey, // ata owner
+    )).address;
+    // Wait a bit for the transaction to be processed
+    await sleep(500);
 
-    const tx = await program.methods
+    await mintTo(
+      provider.connection,
+      firstMintOwner,  //payer
+      mintAddress,
+      aliceTokenAta, // destination
+      firstMintOwner,  // authority
+      mintAmountForAlice
+    );
+
+    const aliceTokenAmount = Number((await provider.connection.getTokenAccountBalance(aliceTokenAta)).value.amount);
+    assert.equal(aliceTokenAmount, mintAmountForAlice);
+  });
+
+  it("Take token authority", async () => {
+    console.log(`Created new mint: ${mintAddress.toBase58()}`);
+    console.log(`First mint owner: ${firstMintOwner.publicKey.toBase58()}`);
+
+    await program.methods
       .takeTokenMintAuthority()
       .accounts({
         owner: OWNER.publicKey,
-        mintOwner: mintOwner.publicKey,
+        mintOwner: firstMintOwner.publicKey,
         tokenMint: mintAddress
       })
-      .signers([OWNER, mintOwner])
+      .signers([OWNER, firstMintOwner])
       .rpc({ skipPreflight: true });
 
     const mintInfo = await getMint(provider.connection, mintAddress);
@@ -76,5 +106,30 @@ describe("solana-node", () => {
 
     assert.deepEqual(mintInfo.mintAuthority, configPda);
   });
+
+  it("Burn and bridge tokens", async () => {
+    const amountToBridge = new anchor.BN(5 * 10 ** mintDecimals);
+    
+    const aliceTokenAmountBefore = Number((await provider.connection.getTokenAccountBalance(aliceTokenAta)).value.amount);
+    const mintSupplyBefore = (await getMint(provider.connection, mintAddress)).supply;
+
+    await program.methods
+      .burnAndBridge(amountToBridge)
+      .accounts({
+        tokenOwner: alice.publicKey,
+        tokenMint: mintAddress
+      })
+      .signers([alice])
+      .rpc({ skipPreflight: true });
+
+    const aliceTokenAmountAfter = Number((await provider.connection.getTokenAccountBalance(aliceTokenAta)).value.amount);
+    const mintSupplyAfter = (await getMint(provider.connection, mintAddress)).supply;
+
+    assert.equal(aliceTokenAmountBefore - aliceTokenAmountAfter, amountToBridge.toNumber());
+    assert.equal(mintSupplyBefore - mintSupplyAfter, BigInt(amountToBridge.toNumber()));
+  });
+
+  // TODO: add test listening for burn event
+  // add to burn event nonce -> add nonce account
 
 });

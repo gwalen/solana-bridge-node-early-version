@@ -8,13 +8,13 @@ pub fn handle(ctx: Context<BurnAndBridge>, amount: u64) -> Result<()> {
         token::Burn {
             mint: ctx.accounts.token_mint.to_account_info(),
             from: ctx.accounts.token_account.to_account_info(),
-            authority: ctx.accounts.token_owner.to_account_info(),
+            authority: ctx.accounts.token_sender.to_account_info(),
         }
     );
 
     emit!(BurnEvent {
         token_mint: ctx.accounts.token_mint.key(),
-        token_owner: ctx.accounts.token_owner.key(),
+        token_owner: ctx.accounts.token_sender.key(),
         amount
     });
 

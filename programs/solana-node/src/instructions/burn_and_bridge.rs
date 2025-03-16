@@ -7,7 +7,7 @@ use crate::state::config::Config;
 pub struct BurnAndBridge<'info> {
 
     #[account(mut)]
-    pub token_owner: Signer<'info>,
+    pub token_sender: Signer<'info>,
 
     #[account(
         seeds = [ Config::SEED_PREFIX ],
@@ -24,7 +24,7 @@ pub struct BurnAndBridge<'info> {
     #[account(
         mut,
         associated_token::mint = token_mint,
-        associated_token::authority = token_owner
+        associated_token::authority = token_sender
     )]
     pub token_account: Account<'info, TokenAccount>,
 

@@ -4,5 +4,9 @@ use anchor_lang::prelude::*;
 #[derive(PartialEq)]
 pub enum BridgeError {
     #[msg("Invalid owner")]
-    InvalidOwner
+    InvalidOwner,
+    #[msg("Invalid relayer")]
+    InvalidRelayer,
+    #[msg("Wrong mint for registered foreign token")]
+    WrongMintForForeignToken,
 }

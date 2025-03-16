@@ -3,9 +3,12 @@ import { Program } from "@coral-xyz/anchor";
 import { SolanaNode } from "../target/types/solana_node";
 import { OWNER, RELAYER } from "./consts";
 import { Keypair, PublicKey } from "@solana/web3.js";
-import { airdrop, deriveConfigPda, sleep } from "./utils";
+import { airdrop, deriveConfigPda, deriveForeignTokenPda, evmAddressTo32Bytes, sleep } from "./utils";
 import { assert } from "chai";
 import { createMint, getMint, getOrCreateAssociatedTokenAccount, mintTo } from "@solana/spl-token";
+
+
+const USDC_ETHEREUM_MAINNET = "0xa0b86991c6218b36c1d19d4a2e9eb0ce3606eb48";
 
 describe("solana-node", () => {
   // Configure the client to use the local cluster.
@@ -17,7 +20,8 @@ describe("solana-node", () => {
   const program = anchor.workspace.SolanaNode as Program<SolanaNode>;
   const firstMintOwner = Keypair.generate();
   const alice = Keypair.generate();
-  const mintDecimals = 6;
+
+  const MINT_DECIMALS = 6;
 
   let configPda: PublicKey;
   let mintAddress: PublicKey;
@@ -50,7 +54,7 @@ describe("solana-node", () => {
   });
 
   it("Mint tokens to alice", async () => {
-    const mintAmountForAlice = 25 * 10 ** mintDecimals;
+    const mintAmountForAlice = 25 * 10 ** MINT_DECIMALS;
 
     // Create the mint
     mintAddress = await createMint(
@@ -58,7 +62,7 @@ describe("solana-node", () => {
       OWNER,
       firstMintOwner.publicKey, // mint authority
       firstMintOwner.publicKey, // Freeze authority
-      mintDecimals
+      MINT_DECIMALS
     );
 
     aliceTokenAta = (await getOrCreateAssociatedTokenAccount(
@@ -108,7 +112,7 @@ describe("solana-node", () => {
   });
 
   it("Burn and bridge tokens", async () => {
-    const amountToBridge = new anchor.BN(5 * 10 ** mintDecimals);
+    const amountToBridge = new anchor.BN(5 * 10 ** MINT_DECIMALS);
     
     const aliceTokenAmountBefore = Number((await provider.connection.getTokenAccountBalance(aliceTokenAta)).value.amount);
     const mintSupplyBefore = (await getMint(provider.connection, mintAddress)).supply;
@@ -122,7 +126,7 @@ describe("solana-node", () => {
     await program.methods
       .burnAndBridge(amountToBridge)
       .accounts({
-        tokenOwner: alice.publicKey,
+        tokenSender: alice.publicKey,
         tokenMint: mintAddress
       })
       .signers([alice])
@@ -134,6 +138,29 @@ describe("solana-node", () => {
     assert.equal(aliceTokenAmountBefore - aliceTokenAmountAfter, amountToBridge.toNumber());
     assert.equal(mintSupplyBefore - mintSupplyAfter, BigInt(amountToBridge.toNumber()));
     assert.equal(burnEventAmount.toNumber(), amountToBridge.toNumber());
+  });
+
+
+  it("Register foreign token", async () =>{
+    const evmAddressAs32Bytes = evmAddressTo32Bytes(USDC_ETHEREUM_MAINNET);
+
+    const foreignTokenPda = deriveForeignTokenPda(program.programId, evmAddressAs32Bytes);
+    console.log("foreignTokenPda", foreignTokenPda.toBase58());
+
+    await program.methods
+      .registerForeignToken(evmAddressAs32Bytes)
+      .accounts({
+        owner: OWNER.publicKey,
+        localMint: mintAddress
+      })
+      .signers([OWNER])
+      .rpc({ skipPreflight: true });
+
+    const foreignTokenAccount = await program.account.foreignToken.fetch(foreignTokenPda);
+    
+    // console.log(foreignTokenAccount);
+    assert.equal(mintAddress.toBase58(), foreignTokenAccount.localAddress.toBase58());
+    assert.deepEqual(evmAddressAs32Bytes, foreignTokenAccount.foreignAddress);
   });
 
 

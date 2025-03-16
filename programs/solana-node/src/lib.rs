@@ -8,6 +8,7 @@ pub mod utils;
 use instructions::initialize::*;
 use instructions::take_token_mint_authority::*;
 use instructions::burn_and_bridge::*;
+use instructions::register_foreign_token::*;
 
 use handlers::*;
 
@@ -30,5 +31,9 @@ pub mod solana_node {
 
     pub fn burn_and_bridge(ctx: Context<BurnAndBridge>, amount: u64) -> Result<()> {
         burn_and_bridge::handle(ctx, amount)
+    }
+
+    pub fn register_foreign_token(ctx: Context<RegisterForeignToken>, foreign_address: [u8; 32]) -> Result<()> {
+        register_foreign_token::handle(ctx, foreign_address)
     }
 }

@@ -4,14 +4,14 @@ use anchor_spl::{token::{Mint, Token, TokenAccount}, associated_token::Associate
 use crate::{state::{config::Config, foreign_token::ForeignToken}, utils::errors::BridgeError};
 
 #[derive(Accounts)]
-#[instruction(foreign_address: [u8; 32])]
+#[instruction(_foreign_address: [u8; 32])]
 pub struct MintAndBridge<'info> {
 
     #[account(mut)]
     pub relayer: Signer<'info>,
 
     // #[account(mut)]
-    /// CHECK: wallet that is the receiver 
+    /// CHECK: wallet that is the receiver // TODO: this could be spoofed by malicious relayer but to verify it we would need full message signature verification
     pub token_receiver: UncheckedAccount<'info>,
 
     #[account(
@@ -38,7 +38,7 @@ pub struct MintAndBridge<'info> {
     #[account(
         seeds = [
             ForeignToken::SEED_PREFIX,
-            &foreign_address
+            &_foreign_address
         ],
         bump,
         constraint = foreign_token.local_address == token_mint.key() @ BridgeError::WrongMintForForeignToken  

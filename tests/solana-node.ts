@@ -163,5 +163,44 @@ describe("solana-node", () => {
     assert.deepEqual(evmAddressAs32Bytes, foreignTokenAccount.foreignAddress);
   });
 
+  it("Mint and bridge tokens", async () => {
+    const amountToBridge = new anchor.BN(5 * 10 ** MINT_DECIMALS);
+    
+    const aliceTokenAmountBefore = Number((await provider.connection.getTokenAccountBalance(aliceTokenAta)).value.amount);
+    const mintSupplyBefore = (await getMint(provider.connection, mintAddress)).supply;
+
+    let eventMintAmount = new anchor.BN(0);
+    let eventTokenOwner = PublicKey.default;
+    let eventTokenMint = PublicKey.default;
+
+    const evmAddressAs32Bytes = evmAddressTo32Bytes(USDC_ETHEREUM_MAINNET);
+    const foreignTokenPda = deriveForeignTokenPda(program.programId, evmAddressAs32Bytes);
+
+    const listenerMyEvent = program.addEventListener('mintEvent', (event, slot) => {
+      eventMintAmount = event.amount;
+      eventTokenOwner = event.tokenOwner;
+      eventTokenMint = event.tokenMint;
+    });
+
+    await program.methods
+      .mintAndBridge(evmAddressAs32Bytes, amountToBridge)
+      .accounts({
+        relayer: RELAYER.publicKey,
+        tokenReceiver: alice.publicKey,
+        tokenMint: mintAddress
+      })
+      .signers([RELAYER])
+      .rpc({ skipPreflight: true });
+
+    const aliceTokenAmountAfter = Number((await provider.connection.getTokenAccountBalance(aliceTokenAta)).value.amount);
+    const mintSupplyAfter = (await getMint(provider.connection, mintAddress)).supply;
+
+    assert.equal(aliceTokenAmountAfter - aliceTokenAmountBefore, amountToBridge.toNumber());
+    assert.equal(mintSupplyAfter - mintSupplyBefore, BigInt(amountToBridge.toNumber()));
+    assert.equal(eventMintAmount.toNumber(), amountToBridge.toNumber());
+    assert.equal(eventTokenOwner.toBase58(), alice.publicKey.toBase58());
+    assert.equal(eventTokenMint.toBase58(), mintAddress.toBase58());
+  });
+
 
 });
